@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Spotify Web Player</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            spotify: {
+              black: '#121212',
+              base: '#000000',
+              elevated: '#181818',
+              highlight: '#282828',
+              press: '#000000',
+              accent: '#E50914',
+              text: '#FFFFFF',
+              subtext: '#B3B3B3'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .custom-scroll::-webkit-scrollbar { width: 8px; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+    .custom-scroll::-webkit-scrollbar-thumb:hover { background: #555; }
+    .backdrop-blur-xl { backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+  </style>
+</head>
+<body class="bg-spotify-base text-spotify-text font-sans h-screen flex flex-col overflow-hidden select-none">
+
+  <div id="youtube-player" class="hidden"></div>
+  <audio id="mobile-audio-keeper" loop class="hidden" src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA="></audio>
+
+  <div class="flex-1 flex overflow-hidden p-0 md:p-2 md:gap-2">
+
+    <aside class="hidden md:flex flex-col w-64 bg-spotify-black rounded-xl p-3 gap-2 flex-shrink-0">
+      <div class="bg-spotify-elevated rounded-lg p-4 space-y-4">
+        <button onclick="switchTab('home')" class="flex items-center gap-4 text-spotify-text hover:text-white font-bold text-sm w-full">
+          <i data-lucide="home" class="w-6 h-6"></i> Inicio
+        </button>
+        <button onclick="switchTab('search')" class="flex items-center gap-4 text-spotify-subtext hover:text-white font-bold text-sm w-full">
+          <i data-lucide="search" class="w-6 h-6"></i> Buscar
+        </button>
+      </div>
+
+      <div class="bg-spotify-elevated rounded-lg p-4 flex-1 flex flex-col overflow-hidden">
+        <div class="flex items-center justify-between text-spotify-subtext mb-4">
+          <button onclick="switchTab('playlists')" class="flex items-center gap-2 hover:text-white font-bold text-sm">
+            <i data-lucide="library" class="w-6 h-6"></i> Tu biblioteca
+          </button>
+          <button onclick="promptCreatePlaylist()" class="hover:text-white p-1">
+            <i data-lucide="plus" class="w-5 h-5"></i>
+          </button>
+        </div>
+        <div id="desktop-library-list" class="flex-1 overflow-y-auto space-y-2 custom-scroll">
+          </div>
+      </div>
+    </aside>
+
+    <main class="flex-1 bg-spotify-black md:rounded-xl flex flex-col overflow-hidden relative">
+      
+      <header class="hidden md:flex items-center justify-between p-4 bg-spotify-black/80 backdrop-blur-md sticky top-0 z-20">
+        <div class="flex gap-2">
+          <button class="w-8 h-8 rounded-full bg-black/70 flex items-center justify-center text-spotify-subtext"><i data-lucide="chevron-left" class="w-5 h-5"></i></button>
+          <button class="w-8 h-8 rounded-full bg-black/70 flex items-center justify-center text-spotify-subtext"><i data-lucide="chevron-right" class="w-5 h-5"></i></button>
+        </div>
+        <div id="desktop-search-bar" class="hidden flex-1 max-w-md mx-4">
+          <div class="relative">
+            <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-spotify-subtext"></i>
+            <input type="text" id="desktop-search-input" placeholder="¿Qué quieres escuchar?" class="w-full pl-10 pr-4 py-2 bg-spotify-highlight text-sm rounded-full outline-none text-white focus:ring-2 focus:ring-white">
+          </div>
+        </div>
+      </header>
+
+      <div class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scroll pb-32 md:pb-6">
+        
+        <section id="view-home" class="tab-content space-y-6">
+          <h2 class="text-2xl font-black tracking-tight">Buenas noches</h2>
+          <div id="home-playlists-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            </div>
+        </section>
+
+        <section id="view-search" class="tab-content space-y-4 hidden">
+          <div class="md:hidden sticky top-0 bg-spotify-black pt-2 pb-4 z-10">
+            <div class="relative">
+              <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-spotify-subtext"></i>
+              <input type="text" id="mobile-search-input" placeholder="Canciones, artistas, videos..." class="w-full pl-10 pr-4 py-3 bg-spotify-highlight text-sm rounded-lg outline-none text-white">
+            </div>
+          </div>
+          <h3 id="search-status" class="text-sm font-bold text-spotify-subtext">Resultados de búsqueda</h3>
+          <div id="search-results-list" class="space-y-1">
+            <p class="text-sm text-spotify-subtext">Escribe en el buscador para encontrar cualquier música en YouTube.</p>
+          </div>
+        </section>
+
+        <section id="view-playlists" class="tab-content space-y-4 hidden">
+          <div class="flex items-center justify-between">
+            <h2 class="text-2xl font-black">Tu biblioteca</h2>
+            <button onclick="promptCreatePlaylist()" class="p-2 bg-spotify-highlight rounded-full hover:bg-white/20">
+              <i data-lucide="plus" class="w-5 h-5 text-white"></i>
+            </button>
+          </div>
+          <div id="user-playlists-list" class="space-y-2"></div>
+        </section>
+
+        <section id="view-playlist-detail" class="tab-content space-y-6 hidden">
+          <div class="flex flex-col md:flex-row items-center md:items-end gap-6 bg-gradient-to-b from-spotify-accent/30 to-transparent p-4 rounded-xl">
+            <img id="detail-cover" src="https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=300&q=80" class="w-48 h-48 shadow-2xl rounded-md object-cover">
+            <div class="space-y-2 text-center md:text-left">
+              <span class="text-xs font-bold uppercase text-spotify-text">Playlist</span>
+              <h1 id="detail-title" class="text-3xl md:text-6xl font-black">Nombre Playlist</h1>
+              <p id="detail-count" class="text-sm text-spotify-subtext">0 canciones</p>
+            </div>
+          </div>
+          <div id="detail-songs-list" class="space-y-1"></div>
+        </section>
+
+      </div>
+    </main>
+
+  </div>
+
+  <footer class="h-20 md:h-24 bg-black border-t border-spotify-highlight/30 px-4 flex items-center justify-between z-50">
+    
+    <div class="flex items-center gap-3 w-1/3 min-w-0 cursor-pointer">
+      <img id="player-thumb" src="https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100&q=80" class="w-12 h-12 rounded object-cover flex-shrink-0 bg-spotify-highlight">
+      <div class="truncate">
+        <h4 id="player-title" class="text-sm font-semibold truncate text-white">Selecciona una canción</h4>
+        <p id="player-artist" class="text-xs text-spotify-subtext truncate">YouTube</p>
+      </div>
+      <button onclick="event.stopPropagation(); toggleCurrentFavorite();"><i id="desktop-fav-icon" data-lucide="heart" class="w-5 h-5 text-spotify-subtext hover:text-white ml-2"></i></button>
+    </div>
+
+    <div class="flex flex-col items-center gap-1 w-full md:w-1/3 max-w-md">
+      <div class="flex items-center gap-4">
+        <button onclick="toggleShuffle()" id="shuffle-btn" class="hidden md:block text-spotify-subtext hover:text-white"><i data-lucide="shuffle" class="w-4 h-4"></i></button>
+        <button onclick="playPrevTrack()" class="text-spotify-subtext hover:text-white"><i data-lucide="skip-back" class="w-5 h-5 fill-current"></i></button>
+        <button id="main-play-btn" onclick="togglePlay()" class="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition">
+          <i id="main-play-icon" data-lucide="play" class="w-4 h-4 fill-black"></i>
+        </button>
+        <button onclick="handleNextSong()" class="text-spotify-subtext hover:text-white"><i data-lucide="skip-forward" class="w-5 h-5 fill-current"></i></button>
+        <button onclick="toggleRepeat()" id="repeat-btn" class="hidden md:block text-spotify-subtext hover:text-white"><i data-lucide="repeat" class="w-4 h-4"></i></button>
+      </div>
+      <div class="hidden md:flex items-center gap-2 w-full text-xs text-spotify-subtext">
+        <span id="current-time">0:00</span>
+        <input type="range" id="progress-bar" value="0" min="0" max="100" oninput="seekTrack(this.value)" class="w-full accent-white h-1 bg-spotify-highlight rounded cursor-pointer">
+        <span id="total-duration">0:00</span>
+      </div>
+    </div>
+
+    <div class="hidden md:flex items-center justify-end gap-3 w-1/3">
+      <i data-lucide="volume-2" class="w-5 h-5 text-spotify-subtext"></i>
+      <input type="range" id="volume-bar" value="100" min="0" max="100" oninput="setVolume(this.value)" class="w-20 accent-white h-1 bg-spotify-highlight rounded cursor-pointer">
+    </div>
+
+  </footer>
+
+  <nav class="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-black/95 border-t border-spotify-highlight/40 flex justify-around items-center z-40 backdrop-blur-lg">
+    <button onclick="switchTab('home')" id="mob-nav-home" class="flex flex-col items-center text-spotify-accent">
+      <i data-lucide="home" class="w-5 h-5"></i>
+      <span class="text-[10px] mt-1 font-medium">Inicio</span>
+    </button>
+    <button onclick="switchTab('search')" id="mob-nav-search" class="flex flex-col items-center text-spotify-subtext">
+      <i data-lucide="search" class="w-5 h-5"></i>
+      <span class="text-[10px] mt-1 font-medium">Buscar</span>
+    </button>
+    <button onclick="switchTab('playlists')" id="mob-nav-library" class="flex flex-col items-center text-spotify-subtext">
+      <i data-lucide="library" class="w-5 h-5"></i>
+      <span class="text-[10px] mt-1 font-medium">Biblioteca</span>
+    </button>
+  </nav>
+
+  <script>
+    lucide.createIcons();
+
+    const YOUTUBE_API_KEY = "AIzaSyDmdwQXMXx3yi8h48KYOgLiY1l86Qm5Ick";
+    let player, queue = [], searchResults = [], currentIndex = 0, isPlaying = false, timer = null;
+
+    // ALMACENAMIENTO LOCAL DE USUARIO
+    let favoriteSongs = JSON.parse(localStorage.getItem('fav_songs') || '[]');
+    let userPlaylists = JSON.parse(localStorage.getItem('user_playlists') || '[]');
+
+    // API DE YOUTUBE
+    const tag = document.createElement('script');
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(tag);
+
+    function onYouTubeIframeAPIReady() {
+      player = new YT.Player('youtube-player', {
+        height: '0', width: '0',
+        playerVars: { 'autoplay': 1, 'controls': 0, 'playsinline': 1 },
+        events: {
+          'onReady': () => {
+            loadHomePlaylists();
+            updateLibraryView();
+          },
+          'onStateChange': onPlayerStateChange
+        }
+      });
+    }
+
+    async function loadHomePlaylists() {
+      try {
+        const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=8&q=musica+top+hits&type=playlist&key=${YOUTUBE_API_KEY}`);
+        const data = await res.json();
+        const grid = document.getElementById('home-playlists-grid');
+
+        if (data.items) {
+          grid.innerHTML = data.items.map(item => `
+            <div onclick="loadYouTubePlaylist('${item.id.playlistId}', '${escapeHtml(item.snippet.title)}', '${item.snippet.thumbnails.high.url}')" class="bg-spotify-elevated hover:bg-spotify-highlight p-4 rounded-md cursor-pointer transition group">
+              <div class="relative mb-4">
+                <img src="${item.snippet.thumbnails.high.url}" class="w-full aspect-square object-cover rounded-md shadow-lg">
+                <button class="absolute bottom-2 right-2 w-10 h-10 bg-spotify-accent rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 shadow-xl transition transform translate-y-2 group-hover:translate-y-0">
+                  <i data-lucide="play" class="w-5 h-5 text-white fill-white ml-0.5"></i>
+                </button>
+              </div>
+              <p class="font-bold text-sm truncate text-white">${escapeHtml(item.snippet.title)}</p>
+              <p class="text-xs text-spotify-subtext mt-1 truncate">${escapeHtml(item.snippet.channelTitle)}</p>
+            </div>
+          `).join('');
+          lucide.createIcons();
+        }
+      } catch (e) { console.error(e); }
+    }
+
+    async function loadYouTubePlaylist(playlistId, title, coverUrl) {
+      try {
+        const res = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=25&playlistId=${playlistId}&key=${YOUTUBE_API_KEY}`);
+        const data = await res.json();
+
+        if (data.items) {
+          queue = data.items
+            .filter(item => item.snippet.title !== "Private video")
+            .map(item => ({
+              id: item.snippet.resourceId.videoId,
+              title: cleanTitle(item.snippet.title),
+              artist: item.snippet.channelTitle,
+              thumb: item.snippet.thumbnails?.high?.url || coverUrl
+            }));
+
+          if (queue.length) {
+            currentIndex = 0;
+            document.getElementById('detail-title').textContent = title;
+            document.getElementById('detail-count').textContent = `${queue.length} canciones`;
+            document.getElementById('detail-cover').src = coverUrl;
+            renderPlaylistSongs(queue);
+            switchTab('playlist-detail');
+            loadTrack(queue[0]);
+          }
+        }
+      } catch (e) { console.error(e); }
+    }
+
+    function renderPlaylistSongs(songs) {
+      const list = document.getElementById('detail-songs-list');
+      if (!songs.length) {
+        list.innerHTML = `<p class="text-xs text-spotify-subtext py-4">Sin temas guardados.</p>`;
+        return;
+      }
+      list.innerHTML = songs.map((song, i) => `
+        <div onclick="playIndex(${i})" class="flex items-center justify-between p-2 rounded-md hover:bg-spotify-highlight/50 cursor-pointer group">
+          <div class="flex items-center gap-3 truncate">
+            <span class="w-5 text-right text-xs text-spotify-subtext font-bold">${i + 1}</span>
+            <img src="${song.thumb}" class="w-10 h-10 rounded object-cover flex-shrink-0">
+            <div class="truncate">
+              <p class="font-semibold text-sm truncate text-white">${escapeHtml(song.title)}</p>
+              <p class="text-xs text-spotify-subtext truncate">${escapeHtml(song.artist)}</p>
+            </div>
+          </div>
+          <button onclick="event.stopPropagation(); showSongMenu('${song.id}')" class="text-spotify-subtext hover:text-white p-2">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+          </button>
+        </div>
+      `).join('');
+      lucide.createIcons();
+    }
+
+    function playIndex(i) {
+      if (!queue[i]) return;
+      currentIndex = i;
+      loadTrack(queue[currentIndex]);
+    }
+
+    function playSearchResult(i) {
+      if (!searchResults[i]) return;
+      queue = [...searchResults];
+      currentIndex = i;
+      loadTrack(queue[currentIndex]);
+    }
+
+    function loadTrack(track) {
+      if (!player || !track) return;
+      
+      const audioKeeper = document.getElementById('mobile-audio-keeper');
+      if (audioKeeper) audioKeeper.play().catch(() => {});
+
+      player.loadVideoById(track.id);
+
+      document.getElementById('player-title').textContent = track.title;
+      document.getElementById('player-artist').textContent = track.artist;
+      document.getElementById('player-thumb').src = track.thumb;
+
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: track.title, artist: track.artist,
+          artwork: [{ src: track.thumb, sizes: '512x512', type: 'image/jpeg' }]
+        });
+      }
+
+      updateFavoriteIcons();
+    }
+
+    function onPlayerStateChange(e) {
+      if (e.data == YT.PlayerState.PLAYING) {
+        isPlaying = true;
+        updatePlayIcons(true);
+        startTimer();
+      } else {
+        isPlaying = false;
+        updatePlayIcons(false);
+        stopTimer();
+      }
+
+      if (e.data == YT.PlayerState.ENDED) handleNextSong();
+    }
+
+    function updatePlayIcons(playing) {
+      const icon = playing ? 'pause' : 'play';
+      const el = document.getElementById('main-play-icon');
+      if (el) el.setAttribute('data-lucide', icon);
+      lucide.createIcons();
+    }
+
+    function togglePlay() {
+      if (!queue.length) return;
+      isPlaying ? player.pauseVideo() : player.playVideo();
+    }
+
+    function handleNextSong() {
+      if (currentIndex < queue.length - 1) {
+        currentIndex++;
+        loadTrack(queue[currentIndex]);
+      }
+    }
+
+    function playPrevTrack() {
+      if (currentIndex > 0) {
+        currentIndex--;
+        loadTrack(queue[currentIndex]);
+      }
+    }
+
+    function startTimer() {
+      stopTimer();
+      timer = setInterval(() => {
+        if (player && player.getCurrentTime) {
+          const c = player.getCurrentTime() || 0, t = player.getDuration() || 0;
+          document.getElementById('current-time').textContent = formatTime(c);
+          document.getElementById('total-duration').textContent = formatTime(t);
+          if (t > 0) document.getElementById('progress-bar').value = (c / t) * 100;
+        }
+      }, 1000);
+    }
+
+    function stopTimer() { if (timer) clearInterval(timer); }
+    function formatTime(s) { const m = Math.floor(s/60), sec = Math.floor(s%60); return `${m}:${sec<10?'0':''}${sec}`; }
+
+    function seekTrack(val) {
+      if (player && player.getDuration) {
+        const seekTo = (val / 100) * player.getDuration();
+        player.seekTo(seekTo, true);
+      }
+    }
+
+    function setVolume(v) {
+      if (player && player.setVolume) player.setVolume(v);
+    }
+
+    // LÓGICA DE BÚSQUEDA SIN RESTRICCIONES DE YOUTUBE
+    let searchDebounceTimer;
+    const searchInputs = [document.getElementById('mobile-search-input'), document.getElementById('desktop-search-input')];
+
+    searchInputs.forEach(input => {
+      if (input) {
+        input.addEventListener('input', (e) => {
+          clearTimeout(searchDebounceTimer);
+          const val = e.target.value.trim();
+          const status = document.getElementById('search-status');
+
+          if (!val) {
+            status.textContent = "Resultados de búsqueda";
+            document.getElementById('search-results-list').innerHTML = '<p class="text-sm text-spotify-subtext">Escribe en el buscador para encontrar cualquier música en YouTube.</p>';
+            searchResults = [];
+            return;
+          }
+
+          status.textContent = "Buscando...";
+          searchDebounceTimer = setTimeout(() => executeSearch(val), 350);
+        });
+      }
+    });
+
+    async function executeSearch(query) {
+      try {
+        const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=20&q=${encodeURIComponent(query)}&type=video&key=${YOUTUBE_API_KEY}`);
+        const data = await res.json();
+        
+        if (data.items && data.items.length) {
+          searchResults = data.items.map(item => {
+            const thumbs = item.snippet.thumbnails;
+            return {
+              id: item.id.videoId,
+              title: cleanTitle(item.snippet.title),
+              artist: item.snippet.channelTitle,
+              thumb: thumbs?.high?.url || thumbs?.medium?.url || thumbs?.default?.url || "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100&q=80"
+            };
+          });
+
+          document.getElementById('search-status').textContent = `Resultados para "${query}"`;
+          const list = document.getElementById('search-results-list');
+          list.innerHTML = searchResults.map((song, i) => `
+            <div onclick="playSearchResult(${i})" class="flex items-center justify-between p-2 rounded-md hover:bg-spotify-highlight/50 cursor-pointer group">
+              <div class="flex items-center gap-3 truncate">
+                <img src="${song.thumb}" class="w-10 h-10 rounded object-cover flex-shrink-0 bg-spotify-elevated">
+                <div class="truncate">
+                  <p class="font-semibold text-sm truncate text-white">${escapeHtml(song.title)}</p>
+                  <p class="text-xs text-spotify-subtext truncate mt-0.5">${escapeHtml(song.artist)}</p>
+                </div>
+              </div>
+              <button onclick="event.stopPropagation(); showSongMenu('${song.id}')" class="text-spotify-subtext p-2 hover:text-white">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+              </button>
+            </div>
+          `).join('');
+          lucide.createIcons();
+        } else {
+          document.getElementById('search-status').textContent = "No se encontraron resultados.";
+        }
+      } catch (e) {
+        document.getElementById('search-status').textContent = "Error al realizar la búsqueda.";
+      }
+    }
+
+    // BIBLIOTECA
+    function updateLibraryView() {
+      const list = document.getElementById('user-playlists-list');
+      const desktopList = document.getElementById('desktop-library-list');
+
+      let html = userPlaylists.map((p, idx) => `
+        <div onclick="openUserPlaylist(${idx})" class="flex items-center gap-3 p-2 rounded-md hover:bg-spotify-highlight cursor-pointer">
+          <div class="w-10 h-10 rounded bg-spotify-highlight flex items-center justify-center text-spotify-subtext">
+            <i data-lucide="music" class="w-5 h-5"></i>
+          </div>
+          <div class="flex-1 truncate">
+            <p class="font-bold text-sm text-white truncate">${escapeHtml(p.title)}</p>
+            <p class="text-xs text-spotify-subtext">${p.songs.length} canciones</p>
+          </div>
+        </div>
+      `).join('');
+
+      const emptyText = `<p class="text-xs text-spotify-subtext">No has creado playlists aún.</p>`;
+      if (list) list.innerHTML = html || emptyText;
+      if (desktopList) desktopList.innerHTML = html || emptyText;
+      lucide.createIcons();
+    }
+
+    function promptCreatePlaylist() {
+      const name = prompt("Nombre de la nueva playlist:");
+      if (name && name.trim()) {
+        userPlaylists.push({ title: name.trim(), songs: [] });
+        localStorage.setItem('user_playlists', JSON.stringify(userPlaylists));
+        updateLibraryView();
+        switchTab('playlists');
+      }
+    }
+
+    function openUserPlaylist(idx) {
+      const p = userPlaylists[idx];
+      if (!p) return;
+      queue = [...p.songs];
+      document.getElementById('detail-title').textContent = p.title;
+      document.getElementById('detail-count').textContent = `${queue.length} canciones`;
+      document.getElementById('detail-cover').src = "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=300&q=80";
+      renderPlaylistSongs(queue);
+      switchTab('playlist-detail');
+    }
+
+    function showSongMenu(songId) {
+      const song = searchResults.find(s => s.id === songId) || queue.find(s => s.id === songId) || (player && queue[currentIndex]);
+      if (!song) return;
+
+      if (!userPlaylists.length) {
+        alert("Primero crea una playlist en Tu Biblioteca.");
+        return;
+      }
+
+      const options = userPlaylists.map((p, i) => `${i + 1}. ${p.title}`).join('\n');
+      const choice = prompt(`Añadir "${song.title}" a:\n${options}\nIngresa el número:`);
+      const idx = parseInt(choice) - 1;
+
+      if (userPlaylists[idx]) {
+        userPlaylists[idx].songs.push(song);
+        localStorage.setItem('user_playlists', JSON.stringify(userPlaylists));
+        alert(`Añadida a "${userPlaylists[idx].title}"`);
+        updateLibraryView();
+      }
+    }
+
+    function toggleCurrentFavorite() {
+      const current = queue[currentIndex];
+      if (!current) return;
+
+      const idx = favoriteSongs.findIndex(s => s.id === current.id);
+      if (idx > -1) {
+        favoriteSongs.splice(idx, 1);
+      } else {
+        favoriteSongs.push(current);
+      }
+      localStorage.setItem('fav_songs', JSON.stringify(favoriteSongs));
+      updateFavoriteIcons();
+    }
+
+    function updateFavoriteIcons() {
+      const current = queue[currentIndex];
+      const isFav = current && favoriteSongs.some(s => s.id === current.id);
+      const el = document.getElementById('desktop-fav-icon');
+      if (el) {
+        el.classList.toggle('text-spotify-accent', isFav);
+        el.classList.toggle('fill-spotify-accent', isFav);
+      }
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      const target = document.getElementById(`view-${tab}`);
+      if (target) target.classList.remove('hidden');
+
+      const isSearch = tab === 'search';
+      const desktopSearchBar = document.getElementById('desktop-search-bar');
+      if (desktopSearchBar) desktopSearchBar.classList.toggle('hidden', !isSearch);
+
+      ['home', 'search', 'library'].forEach(t => {
+        const mobNav = document.getElementById(`mob-nav-${t}`);
+        if (mobNav) {
+          const active = (t === tab) || (t === 'library' && tab === 'playlists');
+          mobNav.className = `flex flex-col items-center ${active ? 'text-spotify-accent' : 'text-spotify-subtext'}`;
+        }
+      });
+    }
+
+    function cleanTitle(title) {
+      const parser = new DOMParser();
+      return parser.parseFromString(title, 'text/html').body.textContent;
+    }
+
+    function escapeHtml(str) {
+      return (str || '').replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
+    function toggleShuffle() {}
+    function toggleRepeat() {}
+  </script>
+</body>
+</html>
